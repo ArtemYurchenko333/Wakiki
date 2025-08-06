@@ -358,9 +358,64 @@ class WkikiBotLoopV3:
         """Поиск и нажатие кнопки Next для поиска следующего пользователя"""
         try:
             print("🔍 Ищем кнопку для отключения/перехода к следующему...")
-            time.sleep(2)  # Увеличиваем паузу для загрузки интерфейса
+            time.sleep(3)  # Увеличиваем паузу для полной загрузки интерфейса после отправки сообщения
             
-            # Сначала пробуем найти кнопки в bottomBar
+            # Специальные селекторы на основе HTML структуры из скриншотов
+            print("🔍 Ищем кнопки Really и Stop по точным селекторам...")
+            
+            # Селекторы для кнопки Really? (из скриншотов)
+            really_selectors = [
+                "//div[@class='bottomButton outlined skipButton noSelect really']",
+                "//div[contains(@class, 'bottomButton') and contains(@class, 'really')]",
+                "//div[contains(@class, 'really')]//div[@class='mainText' and text()='Really?']",
+                "//div[@class='bottomBar']//div[contains(@class, 'really')]",
+                "//div[@class='mainText' and text()='Really?']",
+                "//*[text()='Really?']",
+                "//*[contains(text(), 'Really')]"
+            ]
+            
+            # Селекторы для кнопки Stop (из скриншотов)  
+            stop_selectors = [
+                "//div[@class='bottomButton outlined skipButton noSelect stop']",
+                "//div[contains(@class, 'bottomButton') and contains(@class, 'stop')]",
+                "//div[contains(@class, 'stop')]//div[@class='mainText' and text()='Stop']",
+                "//div[@class='bottomBar']//div[contains(@class, 'stop')]",
+                "//div[@class='mainText' and text()='Stop']",
+                "//*[text()='Stop']",
+                "//*[contains(text(), 'Stop')]"
+            ]
+            
+            # Сначала ищем кнопку Really?
+            print("🔍 Ищем кнопку Really?...")
+            for selector in really_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            print(f"✅ Найдена кнопка Really?: '{element.text}'")
+                            print(f"🖱️ Нажимаем кнопку Really?...")
+                            element.click()
+                            time.sleep(2)
+                            return True
+                except Exception as e:
+                    continue
+            
+            # Затем ищем кнопку Stop
+            print("🔍 Ищем кнопку Stop...")
+            for selector in stop_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            print(f"✅ Найдена кнопка Stop: '{element.text}'")
+                            print(f"🖱️ Нажимаем кнопку Stop...")
+                            element.click()
+                            time.sleep(2)
+                            return True
+                except Exception as e:
+                    continue
+            
+            # Дополнительный поиск в bottomBar
             print("🔍 Ищем кнопки в bottomBar...")
             try:
                 bottom_bar = self.driver.find_element(By.CLASS_NAME, "bottomBar")
@@ -373,10 +428,12 @@ class WkikiBotLoopV3:
                         try:
                             if button.is_displayed() and button.is_enabled():
                                 button_text = button.text.strip().lower()
-                                print(f"  Кнопка в bottomBar: '{button.text}'")
+                                button_classes = button.get_attribute("class") or ""
+                                print(f"  Кнопка в bottomBar: '{button.text}' (классы: {button_classes})")
                                 
-                                # Проверяем на ключевые слова
-                                if any(keyword in button_text for keyword in ["stop", "really", "disconnect", "next", "skip"]):
+                                # Проверяем на ключевые слова в тексте или классах
+                                if (any(keyword in button_text for keyword in ["stop", "really", "disconnect", "next", "skip"]) or
+                                    any(keyword in button_classes.lower() for keyword in ["stop", "really"])):
                                     print(f"✅ Найдена кнопка отключения в bottomBar: '{button.text}'")
                                     print(f"🖱️ Нажимаем кнопку...")
                                     button.click()
@@ -387,207 +444,40 @@ class WkikiBotLoopV3:
             except Exception as e:
                 print(f"❌ Ошибка при поиске в bottomBar: {e}")
             
-            # Сначала пробуем найти все кнопки на странице
-            print("🔍 Сканируем все кнопки на странице...")
-            all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-            all_divs = self.driver.find_elements(By.TAG_NAME, "div")
-            all_spans = self.driver.find_elements(By.TAG_NAME, "span")
-            all_links = self.driver.find_elements(By.TAG_NAME, "a")
+            # Поиск через JavaScript (более надежный способ)
+            print("🔍 Пробуем JavaScript поиск кнопок...")
+            js_script = """
+            // Ищем кнопки Really и Stop
+            var buttons = document.querySelectorAll('div[class*="bottomButton"], div[class*="really"], div[class*="stop"]');
+            for(var i = 0; i < buttons.length; i++) {
+                var btn = buttons[i];
+                var text = btn.textContent.toLowerCase().trim();
+                var classes = btn.className.toLowerCase();
+                
+                if ((text.includes('really') || text.includes('stop') || 
+                     classes.includes('really') || classes.includes('stop')) && 
+                    btn.offsetParent !== null) { // проверяем что элемент видимый
+                    btn.click();
+                    return 'Clicked: ' + btn.textContent + ' (classes: ' + btn.className + ')';
+                }
+            }
+            return 'No buttons found';
+            """
             
-            print(f"📊 Найдено элементов:")
-            print(f"  - Кнопки: {len(all_buttons)}")
-            print(f"  - Div: {len(all_divs)}")
-            print(f"  - Span: {len(all_spans)}")
-            print(f"  - Ссылки: {len(all_links)}")
+            try:
+                result = self.driver.execute_script(js_script)
+                print(f"JavaScript результат: {result}")
+                if "Clicked:" in result:
+                    print("✅ Кнопка найдена и нажата через JavaScript!")
+                    time.sleep(2)
+                    return True
+            except Exception as e:
+                print(f"❌ Ошибка JavaScript: {e}")
             
-            # Проверяем все кнопки
-            for i, button in enumerate(all_buttons):
-                try:
-                    if button.is_displayed() and button.is_enabled():
-                        button_text = button.text.strip().lower()
-                        print(f"  Кнопка {i}: '{button.text}' (видимая: {button.is_displayed()})")
-                        
-                        # Ключевые слова для отключения
-                        disconnect_keywords = ["stop", "disconnect", "next", "skip", "end", "leave", "finish", "close", "quit", "really", "really?", "new"]
-                        if any(keyword in button_text for keyword in disconnect_keywords):
-                            print(f"✅ Найдена кнопка отключения: '{button.text}'")
-                            print(f"🖱️ Нажимаем кнопку...")
-                            button.click()
-                            time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА: было 6, стало 3
-                            return True
-                except Exception as e:
-                    print(f"  ❌ Ошибка с кнопкой {i}: {e}")
-                    continue
-            
-            # Проверяем все div элементы
-            for i, div in enumerate(all_divs):
-                try:
-                    if div.is_displayed() and div.is_enabled():
-                        div_text = div.text.strip().lower()
-                        if len(div_text) > 0 and len(div_text) < 20:  # Только короткие тексты
-                            print(f"  Div {i}: '{div.text}' (видимый: {div.is_displayed()})")
-                            
-                            disconnect_keywords = ["stop", "disconnect", "next", "skip", "end", "leave", "finish", "close", "quit", "really", "really?", "new"]
-                            if any(keyword in div_text for keyword in disconnect_keywords):
-                                print(f"✅ Найдена кнопка отключения (div): '{div.text}'")
-                                print(f"🖱️ Нажимаем div...")
-                                div.click()
-                                time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА
-                                return True
-                except Exception as e:
-                    continue
-            
-            # Проверяем все span элементы
-            for i, span in enumerate(all_spans):
-                try:
-                    if span.is_displayed() and span.is_enabled():
-                        span_text = span.text.strip().lower()
-                        if len(span_text) > 0 and len(span_text) < 20:
-                            print(f"  Span {i}: '{span.text}' (видимый: {span.is_displayed()})")
-                            
-                            disconnect_keywords = ["stop", "disconnect", "next", "skip", "end", "leave", "finish", "close", "quit", "really", "really?", "new"]
-                            if any(keyword in span_text for keyword in disconnect_keywords):
-                                print(f"✅ Найдена кнопка отключения (span): '{span.text}'")
-                                print(f"🖱️ Нажимаем span...")
-                                span.click()
-                                time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА
-                                return True
-                except Exception as e:
-                    continue
-            
-            # Расширенные XPath селекторы
-            print("🔍 Пробуем XPath селекторы...")
-            xpath_selectors = [
-                "//*[contains(text(), 'STOP')]",
-                "//*[contains(text(), 'Stop')]",
-                "//*[contains(text(), 'stop')]",
-                "//*[contains(text(), 'DISCONNECT')]",
-                "//*[contains(text(), 'Disconnect')]",
-                "//*[contains(text(), 'disconnect')]",
-                "//*[contains(text(), 'NEXT')]",
-                "//*[contains(text(), 'Next')]",
-                "//*[contains(text(), 'next')]",
-                "//*[contains(text(), 'SKIP')]",
-                "//*[contains(text(), 'Skip')]",
-                "//*[contains(text(), 'skip')]",
-                "//*[contains(text(), 'END')]",
-                "//*[contains(text(), 'End')]",
-                "//*[contains(text(), 'end')]",
-                "//*[contains(text(), 'LEAVE')]",
-                "//*[contains(text(), 'Leave')]",
-                "//*[contains(text(), 'leave')]",
-                "//*[contains(text(), 'FINISH')]",
-                "//*[contains(text(), 'Finish')]",
-                "//*[contains(text(), 'finish')]",
-                "//*[contains(text(), 'CLOSE')]",
-                "//*[contains(text(), 'Close')]",
-                "//*[contains(text(), 'close')]",
-                "//*[contains(text(), 'QUIT')]",
-                "//*[contains(text(), 'Quit')]",
-                "//*[contains(text(), 'quit')]",
-                "//*[contains(text(), 'REALLY')]",
-                "//*[contains(text(), 'Really')]",
-                "//*[contains(text(), 'really')]",
-                "//*[contains(text(), 'REALLY?')]",
-                "//*[contains(text(), 'Really?')]",
-                "//*[contains(text(), 'really?')]",
-                "//*[contains(text(), 'NEW')]",
-                "//*[contains(text(), 'New')]",
-                "//*[contains(text(), 'new')]",
-                "//div[@class='mainText' and contains(text(), 'New')]",
-                # Специальные селекторы для кнопки Really? на основе HTML структуры
-                "//div[contains(@class, 'really')]",
-                "//div[contains(@class, 'bottomButton') and contains(@class, 'really')]",
-                "//div[@class='bottomButton outlined skipButton noSelect really']",
-                "//div[contains(@class, 'mainText') and text()='Really?']",
-                "//div[contains(@class, 'mainText') and contains(text(), 'Really')]",
-                "//div[@class='bottomBar']//div[contains(@class, 'really')]",
-                "//div[@class='bottomBar']//div[contains(@class, 'mainText') and text()='Really?']",
-                "//div[@class='bottomBar']//div[contains(@class, 'bottomButton') and contains(@class, 'really')]",
-                # Специальные селекторы для кнопки Stop на основе HTML структуры
-                "//div[contains(@class, 'stop')]",
-                "//div[contains(@class, 'bottomButton') and contains(@class, 'stop')]",
-                "//div[@class='bottomButton outlined skipButton noSelect stop']",
-                "//div[contains(@class, 'mainText') and text()='Stop']",
-                "//div[contains(@class, 'mainText') and contains(text(), 'Stop')]",
-                "//div[@class='bottomBar']//div[contains(@class, 'stop')]",
-                "//div[@class='bottomBar']//div[contains(@class, 'mainText') and text()='Stop']",
-                "//div[@class='bottomBar']//div[contains(@class, 'bottomButton') and contains(@class, 'stop')]"
-            ]
-            
-            for selector in xpath_selectors:
-                try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    for element in elements:
-                        if element.is_displayed() and element.is_enabled():
-                            print(f"✅ Найдена кнопка отключения (XPath): '{element.text}'")
-                            print(f"🖱️ Нажимаем элемент...")
-                            element.click()
-                            time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА
-                            return True
-                except Exception as e:
-                    continue
-            
-            # Агрессивные методы отключения
-            print("🔍 Пробуем агрессивные методы отключения...")
-            
-            # 1. Пробуем CSS селекторы для кнопок
-            print("🔍 Пробуем CSS селекторы...")
-            css_selectors = [
-                ".bottomButton",
-                ".bottomButton.stop",
-                ".bottomButton.really",
-                ".bottomButton.outlined",
-                ".bottomButton.skipButton",
-                "div[class*='stop']",
-                "div[class*='really']",
-                "div[class*='bottomButton']",
-                ".mainText"
-            ]
-            
-            for selector in css_selectors:
-                try:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elements:
-                        if element.is_displayed() and element.is_enabled():
-                            element_text = element.text.strip().lower()
-                            print(f"  CSS элемент '{selector}': '{element.text}'")
-                            
-                            if any(keyword in element_text for keyword in ["stop", "really", "disconnect", "next", "skip"]):
-                                print(f"✅ Найдена кнопка отключения (CSS): '{element.text}'")
-                                print(f"🖱️ Нажимаем элемент...")
-                                element.click()
-                                time.sleep(2)
-                                return True
-                except Exception as e:
-                    continue
-            
-            # 2. Пробуем нажать Escape несколько раз
-            from selenium.webdriver.common.action_chains import ActionChains
-            actions = ActionChains(self.driver)
-            for i in range(3):
-                print(f"  Попытка {i+1}: Нажимаем Escape...")
-                actions.send_keys(Keys.ESCAPE).perform()
-                time.sleep(1)
-            
-            # 3. Пробуем нажать Enter
-            print("  Нажимаем Enter...")
-            actions.send_keys(Keys.ENTER).perform()
-            time.sleep(1.5)
-            
-            # 4. Пробуем нажать Tab для переключения фокуса
-            print("  Нажимаем Tab...")
-            actions.send_keys(Keys.TAB).perform()
-            time.sleep(0.5)
-            actions.send_keys(Keys.ENTER).perform()
-            time.sleep(1.5)
-            
-            # 5. Пробуем обновить страницу
-            print("  Обновляем страницу...")
+            # Если ничего не найдено, пробуем обновить страницу
+            print("⚠️ Кнопки отключения не найдены, обновляем страницу...")
             self.driver.refresh()
-            time.sleep(2.5)
-            
-            print("✅ Агрессивные методы отключения выполнены")
+            time.sleep(3)
             return True
             
         except Exception as e:
@@ -610,10 +500,14 @@ class WkikiBotLoopV3:
                 return False
             
             print("✅ Сообщение отправлено успешно!")
+            # Добавляем паузу после отправки сообщения для обновления интерфейса
+            print("⏳ Ждем 2 секунды для обновления интерфейса после отправки сообщения...")
+            time.sleep(2)
+            
             # СРАЗУ отключаемся, без ожидания!
             print("🔌 Сразу пытаемся отключиться от текущего пользователя...")
             disconnect_attempts = 0
-            max_attempts = 8  # Увеличиваем количество попыток
+            max_attempts = 3  # Уменьшаем количество попыток с 8 до 3
             
             while disconnect_attempts < max_attempts:
                 disconnect_attempts += 1
@@ -624,55 +518,13 @@ class WkikiBotLoopV3:
                     break
                 else:
                     print(f"❌ Попытка {disconnect_attempts} не удалась")
-                    time.sleep(1)  # Увеличиваем паузу между попытками
-                    
-                    # Дополнительные методы отключения
-                    if disconnect_attempts >= 4:
-                        print("🔧 Пробуем дополнительные методы отключения...")
-                        try:
-                            from selenium.webdriver.common.action_chains import ActionChains
-                            actions = ActionChains(self.driver)
-                            
-                            # Пробуем разные комбинации клавиш
-                            print("  Нажимаем Ctrl+W...")
-                            actions.key_down(Keys.CONTROL).send_keys('w').key_up(Keys.CONTROL).perform()
-                            time.sleep(1)
-                            
-                            print("  Нажимаем F5...")
-                            actions.send_keys(Keys.F5).perform()
-                            time.sleep(1.5)
-                            
-                            print("  Нажимаем Ctrl+R...")
-                            actions.key_down(Keys.CONTROL).send_keys('r').key_up(Keys.CONTROL).perform()
-                            time.sleep(1.5)
-                            
-                            # Пробуем найти кнопки по JavaScript
-                            print("  Пробуем JavaScript поиск кнопок...")
-                            js_script = """
-                            var buttons = document.querySelectorAll('.bottomButton, div[class*="stop"], div[class*="really"]');
-                            for(var i = 0; i < buttons.length; i++) {
-                                if(buttons[i].textContent.toLowerCase().includes('stop') || 
-                                   buttons[i].textContent.toLowerCase().includes('really')) {
-                                    buttons[i].click();
-                                    return true;
-                                }
-                            }
-                            return false;
-                            """
-                            result = self.driver.execute_script(js_script)
-                            if result:
-                                print("✅ Кнопка найдена и нажата через JavaScript!")
-                                time.sleep(2)
-                                break
-                            
-                        except Exception as e:
-                            print(f"⚠️ Ошибка при дополнительных методах: {e}")
+                    time.sleep(2)  # Увеличиваем паузу между попытками для стабилизации интерфейса
             
             # Если все попытки не удались, принудительно обновляем страницу
             if disconnect_attempts >= max_attempts:
                 print("⚠️ Все попытки отключения не удались, обновляем страницу...")
                 self.driver.refresh()
-                time.sleep(3)
+                time.sleep(4)  # Увеличиваем время ожидания после обновления страницы
             
             self.message_count += 1
             print(f"✅ Пользователь #{self.message_count} обработан!")
