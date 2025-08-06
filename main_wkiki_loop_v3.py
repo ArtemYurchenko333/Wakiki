@@ -380,10 +380,17 @@ class WkikiBotLoopV3:
                                     print(f"✅ Найдена кнопка отключения в bottomBar: '{button.text}'")
                                     print(f"🖱️ Нажимаем кнопку...")
                                     button.click()
-                                    time.sleep(2)
+                                    time.sleep(1)
+
+                                    # После нажатия Stop пробуем подтвердить через Really?
+                                    if self._click_really_confirmation():
+                                        return True
+
+                                    # Если подтверждения нет, возвращаем True, считая, что отключение прошло
                                     return True
-                        except Exception as e:
-                            continue
+                                     
+                                 except Exception as e:
+                                     continue
             except Exception as e:
                 print(f"❌ Ошибка при поиске в bottomBar: {e}")
             
@@ -413,7 +420,11 @@ class WkikiBotLoopV3:
                             print(f"✅ Найдена кнопка отключения: '{button.text}'")
                             print(f"🖱️ Нажимаем кнопку...")
                             button.click()
-                            time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА: было 6, стало 3
+                            time.sleep(1.5)
+
+                            # Пробуем сразу подтвердить отключение, если требуется
+                            self._click_really_confirmation()
+
                             return True
                 except Exception as e:
                     print(f"  ❌ Ошибка с кнопкой {i}: {e}")
@@ -432,7 +443,10 @@ class WkikiBotLoopV3:
                                 print(f"✅ Найдена кнопка отключения (div): '{div.text}'")
                                 print(f"🖱️ Нажимаем div...")
                                 div.click()
-                                time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА
+                                time.sleep(1.5)
+
+                                self._click_really_confirmation()
+
                                 return True
                 except Exception as e:
                     continue
@@ -450,7 +464,10 @@ class WkikiBotLoopV3:
                                 print(f"✅ Найдена кнопка отключения (span): '{span.text}'")
                                 print(f"🖱️ Нажимаем span...")
                                 span.click()
-                                time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА
+                                time.sleep(1.5)
+
+                                self._click_really_confirmation()
+
                                 return True
                 except Exception as e:
                     continue
@@ -523,7 +540,10 @@ class WkikiBotLoopV3:
                             print(f"✅ Найдена кнопка отключения (XPath): '{element.text}'")
                             print(f"🖱️ Нажимаем элемент...")
                             element.click()
-                            time.sleep(3)  # УМЕНЬШЕНО В 2 РАЗА
+                            time.sleep(1.5)
+
+                            self._click_really_confirmation()
+
                             return True
                 except Exception as e:
                     continue
@@ -557,7 +577,10 @@ class WkikiBotLoopV3:
                                 print(f"✅ Найдена кнопка отключения (CSS): '{element.text}'")
                                 print(f"🖱️ Нажимаем элемент...")
                                 element.click()
-                                time.sleep(2)
+                                time.sleep(1.5)
+
+                                self._click_really_confirmation()
+
                                 return True
                 except Exception as e:
                     continue
@@ -755,6 +778,31 @@ class WkikiBotLoopV3:
                 self.driver = None
         except Exception as e:
             print(f"⚠️ Ошибка при закрытии браузера: {e}")
+
+    def _click_really_confirmation(self, wait_time: float = 2.0) -> bool:
+        """Пробует найти и нажать кнопку подтверждения Really? после нажатия Stop."""
+        try:
+            time.sleep(0.5)  # даём интерфейсу обновиться
+            confirm_selectors = [
+                "//div[contains(@class, 'really')]",
+                "//div[contains(@class, 'bottomButton') and contains(@class, 'really')]",
+                "//div[@class='bottomButton outlined skipButton noSelect really']",
+                "//div[contains(@class, 'mainText') and contains(text(), 'Really')]",
+            ]
+            for sel in confirm_selectors:
+                elements = self.driver.find_elements(By.XPATH, sel)
+                for el in elements:
+                    try:
+                        if el.is_displayed() and el.is_enabled():
+                            print(f"✅ Найдена кнопка подтверждения (selector={sel}): '{el.text}'")
+                            el.click()
+                            time.sleep(wait_time)
+                            return True
+                    except Exception:
+                        continue
+        except Exception as e:
+            print(f"⚠️ Ошибка при поиске кнопки Really?: {e}")
+        return False
 
 def main():
     """Основная функция"""
